@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Advanced Eye Tracking Interface</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/webgazer/2.0.1/webgazer.min.js"></script>
+    <!-- WebGazer.js will be loaded dynamically by the script below -->
     <style>
         body {
             margin: 0;
@@ -547,7 +547,6 @@
     <div class="dwell-indicator" id="dwellIndicator"></div>
 
     <script>
-        // ...existing code...
         let isTracking = false;
         let showGazeDot = true;
         let gazeCount = 0;
@@ -564,7 +563,6 @@
         let sessionStartTime = Date.now();
         let gazeTrail = [];
 
-        // DOM elements
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
         const calibrateBtn = document.getElementById('calibrateBtn');
@@ -578,60 +576,171 @@
         const dwellIndicator = document.getElementById('dwellIndicator');
         const heatmap = document.getElementById('heatmap');
 
-        // Initialize WebGazer with enhanced features
-        function initWebGazer() {
-            // Check if WebGazer is loaded
-            if (typeof webgazer === 'undefined') {
-                status.textContent = '⚠️ Loading WebGazer library... Please wait and try again.';
-                setTimeout(() => {
-                    if (typeof webgazer !== 'undefined') {
-                        initWebGazer();
-                    } else {
-                        status.textContent = '❌ Failed to load WebGazer. Please refresh the page.';
-                        startBtn.disabled = false;
-                    }
-                }, 2000);
+        let currentCdnIndex = 0;
+        const webgazerCdnUrls = [
+            "https://cdn.jsdelivr.net/npm/webgazer@2.0.1/dist/webgazer.min.js",
+            "https://unpkg.com/webgazer@2.0.1/dist/webgazer.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/webgazer/2.0.1/webgazer.min.js",
+            "https://cdn.jsdelivr.net/npm/webgazer/dist/webgazer.min.js"
+        ];
+
+        function tryLoadWebGazer() {
+            if (typeof webgazer !== 'undefined' && webgazer.isReady()) {
+                initializeWebGazerInstance();
                 return;
             }
 
+            if (typeof webgazer !== 'undefined' && !webgazer.isReady()){
+                initializeWebGazerInstance();
+                return;
+            }
+
+            if (currentCdnIndex >= webgazerCdnUrls.length) {
+                status.textContent = '❌ Failed to load WebGazer from all sources. Please check your internet connection and try refreshing.';
+                console.error("Failed to load WebGazer from all CDNs.");
+                startBtn.disabled = false;
+                startBtn.classList.remove('active');
+                return;
+            }
+
+            const cdnUrl = webgazerCdnUrls[currentCdnIndex];
+            status.textContent = `Attempting to load WebGazer from: ${cdnUrl.split('/')[2]}... (${currentCdnIndex + 1}/${webgazerCdnUrls.length})`;
+            console.log(`Attempting to load WebGazer from: ${cdnUrl}`);
+
+            const existingScripts = document.querySelectorAll('script[src*="webgazer"]');
+            existingScripts.forEach(s => {
+                if (webgazerCdnUrls.includes(s.src)) s.remove();
+            });
+
+            const script = document.createElement('script');
+            script.src = cdnUrl;
+            script.async = true;
+
+            script.onload = () => {
+                console.log(`Successfully loaded script from: ${cdnUrl}`);
+                setTimeout(() => {
+                    if (typeof webgazer !== 'undefined') {
+                        status.textContent = 'WebGazer library loaded. Initializing eye tracking systems...';
+                        initializeWebGazerInstance();
+                    } else {
+                        console.warn(`WebGazer object not found after loading ${cdnUrl}. Trying next CDN.`);
+                        currentCdnIndex++;
+                        tryLoadWebGazer(); 
+                    }
+                }, 100);
+            };
+
+            script.onerror = () => {
+                console.error(`Failed to load script from: ${cdnUrl}`);
+                currentCdnIndex++;
+                tryLoadWebGazer(); 
+            };
+
+            document.head.appendChild(script);
+        }
+
+        function initializeWebGazerInstance() {
+            if (typeof webgazer === 'undefined') {
+                status.textContent = '❌ Critical error: WebGazer is undefined even after attempting to load. Please refresh.';
+                console.error("Critical error: WebGazer is undefined.");
+                startBtn.disabled = false;
+                startBtn.classList.remove('active');
+                currentCdnIndex = 0; 
+                return;
+            }
+
+            webgazer.clearData(); 
             webgazer.setGazeListener((data, timestamp) => {
-                if (data == null) return;
-                
+                if (data == null || !isTracking) return;
+
                 gazeCount++;
                 frameCount++;
 
-                // Update gaze dot with trail effect
                 if (showGazeDot) {
                     updateGazeDot(data.x, data.y);
                 }
 
-                // Add to heatmap
                 addHeatmapPoint(data.x, data.y);
 
-                // Handle dwell mode or direct targeting
                 if (dwellMode) {
                     handleDwellInteraction(data.x, data.y);
                 } else {
-                    checkTargetHit(data.x, data.y);
+                    checkTargetHit(data.x, data.y); 
                 }
-
-                // Update stats
                 updateStats();
-            });
+            }).setRegression('ridge')
+              .setTracker('TFFacemesh');
 
-            webgazer.setRegression('ridge')
-                .setTracker('TFFacemesh')
-                .begin();
+            status.textContent = '🚀 Initializing eye tracking systems... Please wait for camera access.';
+
+            webgazer.begin()
+                .then(() => {
+                    console.log("WebGazer.begin() successful");
+                    status.textContent = '✅ Eye tracking systems initialized. Ready for calibration.';
+                    isTracking = true;
+                    sessionStartTime = Date.now();
+                    startBtn.disabled = true;
+                    startBtn.classList.add('active');
+                    stopBtn.disabled = false;
+                    calibrateBtn.disabled = false; 
+                    autoCalBtn.disabled = false;
+                    precisionCalBtn.disabled = false;
+                })
+                .catch((error) => {
+                    console.error("Error starting WebGazer: ", error);
+                    let errorMsg = error.message || error.toString();
+                    if (errorMsg.includes("getUserMedia")) {
+                        errorMsg = "Camera access denied or not available. Please enable camera permissions.";
+                    } else if (errorMsg.includes("tf")) {
+                        errorMsg = "TensorFlow model loading error. Check network or try a different CDN.";
+                    }
+                    status.textContent = `❌ Error initializing WebGazer: ${errorMsg}`;
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('active');
+                    stopBtn.disabled = true;
+                    calibrateBtn.disabled = true;
+                    autoCalBtn.disabled = true;
+                    precisionCalBtn.disabled = true;
+                    isTracking = false;
+                });
         }
 
-        // Enhanced gaze dot with trail effect
+        function checkTargetHit(x, y) {
+            const targets = document.querySelectorAll('.interactive-target:not(.gazed)');
+            for (let target of targets) {
+                const rect = target.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                if (distance < 50) { 
+                    target.classList.add('gazed'); 
+                    activateTarget(target);
+                    setTimeout(() => target.classList.remove('gazed'), 600); 
+                    break; 
+                }
+            }
+        }
+
+        function activateTarget(target) {
+            target.classList.add('clicked');
+            target.style.background = 'linear-gradient(45deg, #ff6b6b, #ff4757)';
+            target.style.transform = 'translate(-50%, -50%) scale(1.3) rotate(10deg)';
+
+            setTimeout(() => {
+                target.classList.remove('clicked');
+                target.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
+                target.style.transform = 'translate(-50%, -50%) scale(1)';
+            }, 600);
+
+            targetHits++;
+        }
+
         function updateGazeDot(x, y) {
             gazeDot.style.left = x + 'px';
             gazeDot.style.top = y + 'px';
             gazeDot.style.display = 'block';
 
-            // Create trail effect
-            if (Math.random() < 0.3) { // Reduce trail frequency for performance
+            if (Math.random() < 0.3) { 
                 createTrailDot(x, y);
             }
         }
@@ -650,20 +759,19 @@
             }, 1000);
         }
 
-        // Enhanced dwell interaction
         function handleDwellInteraction(x, y) {
             const target = getTargetUnderGaze(x, y);
-            
+
             if (target) {
                 if (currentDwellTarget !== target) {
                     currentDwellTarget = target;
                     dwellStartTime = Date.now();
                     showDwellIndicator(target);
                 }
-                
+
                 const dwellProgress = (Date.now() - dwellStartTime) / dwellTimeMs;
                 updateDwellProgress(dwellProgress);
-                
+
                 if (dwellProgress >= 1) {
                     activateTarget(target);
                     currentDwellTarget = null;
@@ -702,27 +810,10 @@
         }
 
         function updateDwellProgress(progress) {
-            const circumference = 2 * Math.PI * 18; // radius of 18
+            const circumference = 2 * Math.PI * 18; 
             const offset = circumference - (progress * circumference);
-            // Update progress ring if you add SVG
         }
 
-        function activateTarget(target) {
-            target.classList.add('clicked');
-            target.style.background = 'linear-gradient(45deg, #ff6b6b, #ff4757)';
-            target.style.transform = 'translate(-50%, -50%) scale(1.3) rotate(10deg)';
-            
-            // Reset after animation
-            setTimeout(() => {
-                target.classList.remove('clicked');
-                target.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
-                target.style.transform = 'translate(-50%, -50%) scale(1)';
-            }, 600);
-            
-            targetHits++;
-        }
-
-        // Enhanced heatmap with better visualization
         function addHeatmapPoint(x, y) {
             const rect = heatmap.getBoundingClientRect();
             const relativeX = ((x - rect.left) / rect.width) * 100;
@@ -733,14 +824,12 @@
                 point.className = 'heatmap-point';
                 point.style.left = relativeX + '%';
                 point.style.top = relativeY + '%';
-                
-                // Add intensity based on density
+
                 const intensity = Math.random() * 0.5 + 0.5;
                 point.style.background = `radial-gradient(circle, rgba(255, 107, 107, ${intensity}), transparent)`;
-                
+
                 heatmap.appendChild(point);
 
-                // Remove old points to prevent memory issues
                 if (heatmap.children.length > 1000) {
                     for (let i = 0; i < 100; i++) {
                         if (heatmap.children[i]) {
@@ -751,65 +840,11 @@
             }
         }
 
-        // Enhanced calibration with more points
-        function precisionCalibrate() {
-            const points = [
-                {x: 5, y: 5}, {x: 25, y: 5}, {x: 50, y: 5}, {x: 75, y: 5}, {x: 95, y: 5},
-                {x: 5, y: 30}, {x: 25, y: 30}, {x: 75, y: 30}, {x: 95, y: 30},
-                {x: 5, y: 50}, {x: 50, y: 50}, {x: 95, y: 50},
-                {x: 5, y: 70}, {x: 25, y: 70}, {x: 75, y: 70}, {x: 95, y: 70},
-                {x: 5, y: 95}, {x: 25, y: 95}, {x: 50, y: 95}, {x: 75, y: 95}, {x: 95, y: 95}
-            ];
-            startCalibrationSequence(points, 'Precision calibration in progress...');
-        }
-
-        function autoCalibrate() {
-            const points = [
-                {x: 10, y: 10}, {x: 50, y: 10}, {x: 90, y: 10},
-                {x: 10, y: 50}, {x: 50, y: 50}, {x: 90, y: 50},
-                {x: 10, y: 90}, {x: 50, y: 90}, {x: 90, y: 90}
-            ];
-            startCalibrationSequence(points, 'Standard calibration in progress...');
-        }
-
-        function startCalibrationSequence(points, message) {
-            let currentPoint = 0;
-            isCalibrating = true;
-            status.textContent = message;
-
-            function showNextPoint() {
-                document.getElementById('calibrationPoints').innerHTML = '';
-                
-                if (currentPoint >= points.length) {
-                    isCalibrating = false;
-                    status.textContent = '✅ Calibration complete! Neural patterns learned successfully.';
-                    return;
-                }
-
-                const point = points[currentPoint];
-                const calibPoint = document.createElement('div');
-                calibPoint.className = 'calibration-point';
-                calibPoint.style.left = point.x + '%';
-                calibPoint.style.top = point.y + '%';
-                
-                calibPoint.onclick = () => {
-                    currentPoint++;
-                    setTimeout(showNextPoint, 800);
-                };
-                
-                document.getElementById('calibrationPoints').appendChild(calibPoint);
-            }
-
-            showNextPoint();
-        }
-
-        // Enhanced stats with session time
         function updateStats() {
             document.getElementById('gazeCount').textContent = gazeCount.toLocaleString();
             document.getElementById('targetHits').textContent = targetHits;
             document.getElementById('dwellCount').textContent = dwellCount;
 
-            // Calculate FPS
             const now = Date.now();
             if (now - lastFrameTime >= 1000) {
                 document.getElementById('fps').textContent = frameCount;
@@ -817,35 +852,41 @@
                 lastFrameTime = now;
             }
 
-            // Update session time
             const sessionDuration = Math.floor((now - sessionStartTime) / 1000);
             const minutes = Math.floor(sessionDuration / 60).toString().padStart(2, '0');
             const seconds = (sessionDuration % 60).toString().padStart(2, '0');
             document.getElementById('sessionTime').textContent = `${minutes}:${seconds}`;
 
-            // Estimate accuracy based on calibration and interaction success
             if (gazeCount > 100) {
                 const accuracyScore = Math.min(95, 60 + (targetHits / gazeCount * 1000) * 35);
                 document.getElementById('accuracy').textContent = accuracyScore.toFixed(1) + '%';
             }
         }
 
-        // Enhanced event listeners
         startBtn.addEventListener('click', () => {
-            initWebGazer();
-            isTracking = true;
-            sessionStartTime = Date.now();
             startBtn.disabled = true;
             startBtn.classList.add('active');
-            stopBtn.disabled = false;
-            calibrateBtn.disabled = false;
-            autoCalBtn.disabled = false;
-            precisionCalBtn.disabled = false;
-            status.textContent = '🚀 Neural interface active! Initializing eye tracking systems...';
+            stopBtn.disabled = true;
+            calibrateBtn.disabled = true;
+            autoCalBtn.disabled = true;
+            precisionCalBtn.disabled = true;
+
+            status.textContent = '🚀 Initializing neural interface... Please wait.';
+            currentCdnIndex = 0; 
+
+            if (typeof webgazer !== 'undefined' && webgazer.isInitialized() && !webgazer.isReady()) {
+                console.log("WebGazer exists and initialized but not ready, calling initializeWebGazerInstance to run .begin()");
+                initializeWebGazerInstance();
+            } else {
+                tryLoadWebGazer();
+            }
         });
 
         stopBtn.addEventListener('click', () => {
-            webgazer.end();
+            if (typeof webgazer !== 'undefined' && webgazer.isReady()) {
+                webgazer.end();
+                console.log("WebGazer tracking stopped.");
+            }
             isTracking = false;
             startBtn.disabled = false;
             startBtn.classList.remove('active');
@@ -855,7 +896,7 @@
             precisionCalBtn.disabled = true;
             gazeDot.style.display = 'none';
             hideDwellIndicator();
-            status.textContent = '⏹️ Neural interface disconnected.';
+            status.textContent = '⏹️ Neural interface disconnected. Click "Initialize Tracking" to restart.';
         });
 
         toggleBtn.addEventListener('click', () => {
@@ -879,28 +920,56 @@
             heatmap.innerHTML = '<h3 style="text-align: center; margin: 0 0 20px 0; position: relative; z-index: 2;">🔥 Neural Activity Heatmap</h3>';
         });
 
-        autoCalBtn.addEventListener('click', autoCalibrate);
-        precisionCalBtn.addEventListener('click', precisionCalibrate);
+        autoCalBtn.addEventListener('click', () => {
+            const points = [
+                {x: 10, y: 10}, {x: 50, y: 10}, {x: 90, y: 10},
+                {x: 10, y: 50}, {x: 50, y: 50}, {x: 90, y: 50},
+                {x: 10, y: 90}, {x: 50, y: 90}, {x: 90, y: 90}
+            ];
+            startCalibrationSequence(points, 'Standard calibration in progress...');
+        });
 
-        // Add some initial visual feedback
-        function addRandomCalibrationPoint() {
-            if (!isCalibrating && !isTracking) {
-                const x = Math.random() * 80 + 10;
-                const y = Math.random() * 60 + 20;
-                const point = document.createElement('div');
-                point.className = 'calibration-point';
-                point.style.left = x + '%';
-                point.style.top = y + '%';
-                point.onclick = () => {
-                    point.remove();
-                    setTimeout(addRandomCalibrationPoint, 3000);
+        precisionCalBtn.addEventListener('click', () => {
+            const points = [
+                {x: 5, y: 5}, {x: 25, y: 5}, {x: 50, y: 5}, {x: 75, y: 5}, {x: 95, y: 5},
+                {x: 5, y: 30}, {x: 25, y: 30}, {x: 75, y: 30}, {x: 95, y: 30},
+                {x: 5, y: 50}, {x: 50, y: 50}, {x: 95, y: 50},
+                {x: 5, y: 70}, {x: 25, y: 70}, {x: 75, y: 70}, {x: 95, y: 70},
+                {x: 5, y: 95}, {x: 25, y: 95}, {x: 50, y: 95}, {x: 75, y: 95}, {x: 95, y: 95}
+            ];
+            startCalibrationSequence(points, 'Precision calibration in progress...');
+        });
+
+        function startCalibrationSequence(points, message) {
+            let currentPoint = 0;
+            isCalibrating = true;
+            status.textContent = message;
+
+            function showNextPoint() {
+                document.getElementById('calibrationPoints').innerHTML = '';
+
+                if (currentPoint >= points.length) {
+                    isCalibrating = false;
+                    status.textContent = '✅ Calibration complete! Neural patterns learned successfully.';
+                    return;
+                }
+
+                const point = points[currentPoint];
+                const calibPoint = document.createElement('div');
+                calibPoint.className = 'calibration-point';
+                calibPoint.style.left = point.x + '%';
+                calibPoint.style.top = point.y + '%';
+
+                calibPoint.onclick = () => {
+                    currentPoint++;
+                    setTimeout(showNextPoint, 800);
                 };
-                document.getElementById('calibrationPoints').appendChild(point);
-            }
-        }
 
-        // Start with a demo calibration point
-        setTimeout(addRandomCalibrationPoint, 2000);
+                document.getElementById('calibrationPoints').appendChild(calibPoint);
+            }
+
+            showNextPoint();
+        }
     </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
