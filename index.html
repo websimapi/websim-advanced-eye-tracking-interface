@@ -585,16 +585,6 @@
         ];
 
         function tryLoadWebGazer() {
-            if (typeof webgazer !== 'undefined' && webgazer.isReady()) {
-                initializeWebGazerInstance();
-                return;
-            }
-
-            if (typeof webgazer !== 'undefined' && !webgazer.isReady()){
-                initializeWebGazerInstance();
-                return;
-            }
-
             if (currentCdnIndex >= webgazerCdnUrls.length) {
                 status.textContent = '❌ Failed to load WebGazer from all sources. Please check your internet connection and try refreshing.';
                 console.error("Failed to load WebGazer from all CDNs.");
@@ -682,7 +672,7 @@
                     startBtn.disabled = true;
                     startBtn.classList.add('active');
                     stopBtn.disabled = false;
-                    calibrateBtn.disabled = false; 
+                    calibrateBtn.disabled = false;
                     autoCalBtn.disabled = false;
                     precisionCalBtn.disabled = false;
                 })
@@ -874,11 +864,12 @@
             status.textContent = '🚀 Initializing neural interface... Please wait.';
             currentCdnIndex = 0; 
 
-            if (typeof webgazer !== 'undefined' && webgazer.isInitialized() && !webgazer.isReady()) {
-                console.log("WebGazer exists and initialized but not ready, calling initializeWebGazerInstance to run .begin()");
+            if (typeof webgazer !== 'undefined') {
+                console.log("WebGazer script already loaded. Initializing/re-initializing tracking.");
                 initializeWebGazerInstance();
             } else {
-                tryLoadWebGazer();
+                console.log("WebGazer script not loaded. Attempting to load from CDN.");
+                tryLoadWebGazer(); 
             }
         });
 
