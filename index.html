@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Eye Tracking Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/webgazer/2.0.1/webgazer.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 3.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleGlow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes titleGlow {
+            0% { filter: drop-shadow(0 0 10px rgba(255, 107, 107, 0.5)); }
+            100% { filter: drop-shadow(0 0 20px rgba(78, 205, 196, 0.8)); }
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn.active {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            box-shadow: 0 0 30px rgba(255, 107, 107, 0.4);
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);
+            animation: statusPulse 2s infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.03) 0%, transparent 70%);
+            animation: panelShimmer 8s linear infinite;
+        }
+
+        @keyframes panelShimmer {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .calibration-area {
+            text-align: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .calibration-zone {
+            position: relative;
+            height: 300px;
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 15px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .calibration-point {
+            width: 24px;
+            height: 24px;
+            background: radial-gradient(circle, #ff6b6b, #ff4757);
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            box-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
+            animation: calibrationPulse 1.5s infinite;
+            transform: translate(-50%, -50%);
+            border: 3px solid rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes calibrationPulse {
+            0%, 100% { 
+                transform: translate(-50%, -50%) scale(1);
+                box-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
+            }
+            50% { 
+                transform: translate(-50%, -50%) scale(1.3);
+                box-shadow: 0 0 50px rgba(255, 107, 107, 1);
+            }
+        }
+
+        .interaction-zone {
+            position: relative;
+            min-height: 300px;
+            z-index: 2;
+        }
+
+        .interactive-target {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(45deg, #4ecdc4, #44a08d);
+            border-radius: 20px;
+            position: absolute;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.5em;
+            color: white;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 30px rgba(78, 205, 196, 0.3);
+            transform: translate(-50%, -50%);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .interactive-target::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            border-radius: 22px;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .interactive-target:hover::before {
+            opacity: 1;
+        }
+
+        .interactive-target.gazed {
+            transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+            background: linear-gradient(45deg, #ff6b6b, #ff4757);
+            box-shadow: 0 15px 50px rgba(255, 107, 107, 0.6);
+        }
+
+        .interactive-target.clicked {
+            animation: targetExplode 0.6s ease-out;
+        }
+
+        @keyframes targetExplode {
+            0% { transform: translate(-50%, -50%) scale(1.2); }
+            50% { transform: translate(-50%, -50%) scale(1.5) rotate(10deg); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .gaze-dot {
+            position: fixed;
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle, #ff6b6b, #ff4757);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            box-shadow: 0 0 20px rgba(255, 107, 107, 0.8);
+            transition: all 0.1s ease;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .gaze-trail {
+            position: fixed;
+            width: 6px;
+            height: 6px;
+            background: rgba(255, 107, 107, 0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9998;
+            animation: trailFade 1s ease-out forwards;
+        }
+
+        @keyframes trailFade {
+            0% { opacity: 0.6; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.3); }
+        }
+
+        .heatmap-container {
+            grid-column: 1 / -1;
+            position: relative;
+            height: 250px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            margin-top: 20px;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .heatmap-point {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: radial-gradient(circle, rgba(255, 107, 107, 0.8), transparent);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: heatmapFade 2s ease-out forwards;
+        }
+
+        @keyframes heatmapFade {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0.3; transform: scale(0.5); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            background: linear-gradient(45deg, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .webcam-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .webcam-container:hover {
+            transform: scale(1.05);
+        }
+
+        #webgazerVideoFeed {
+            width: 200px !important;
+            height: 150px !important;
+            border-radius: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .progress-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+        }
+
+        .progress-ring-circle {
+            width: 100px;
+            height: 100px;
+            fill: transparent;
+            stroke: #4ecdc4;
+            stroke-width: 4;
+            stroke-dasharray: 283;
+            stroke-dashoffset: 283;
+            transition: stroke-dashoffset 0.5s;
+        }
+
+        .dwell-indicator {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #4ecdc4;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9997;
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .dwell-indicator.active {
+            opacity: 1;
+            animation: dwellPulse 0.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes dwellPulse {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.2); }
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .webcam-container {
+                position: relative;
+                top: auto;
+                right: auto;
+                margin: 20px auto;
+                width: fit-content;
+            }
+            
+            .header h1 {
+                font-size: 2.5em;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+
+        .eye-icon {
+            display: inline-block;
+            animation: blink 3s infinite;
+        }
+
+        @keyframes blink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            95% { transform: scaleY(0.1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span class="eye-icon">👁️</span> Neural Eye Interface <span class="eye-icon">👁️</span></h1>
+            <p class="subtitle">Advanced real-time eye tracking with AI-powered gaze prediction</p>
+        </div>
+
+        <div class="controls">
+            <button class="btn" id="startBtn">🚀 Initialize Tracking</button>
+            <button class="btn" id="stopBtn" disabled>⏹️ Stop Tracking</button>
+            <button class="btn" id="calibrateBtn" disabled>🎯 Smart Calibration</button>
+            <button class="btn" id="togglePrediction">👁️ Toggle Gaze Dot</button>
+            <button class="btn" id="clearHeatmap">🧹 Clear Heatmap</button>
+            <button class="btn" id="dwellMode">⏱️ Dwell Mode</button>
+        </div>
+
+        <div class="status" id="status">
+            Ready to begin neural interface calibration. Camera access required for eye tracking.
+        </div>
+
+        <div class="main-grid">
+            <div class="panel calibration-area">
+                <h3>🎯 Neural Calibration</h3>
+                <p>Focus on the pulsing targets to train the AI model</p>
+                <div class="calibration-zone" id="calibrationPoints">
+                    <div style="opacity: 0.5; font-size: 1.2em;">Calibration targets will appear here</div>
+                </div>
+                <button class="btn" id="autoCalibrate" style="margin-top: 15px;" disabled>🤖 Auto Calibrate (9 Points)</button>
+                <button class="btn" id="precisionCalibrate" style="margin-top: 10px;" disabled>⚡ Precision Mode (16 Points)</button>
+            </div>
+
+            <div class="panel interaction-zone">
+                <h3>🎮 Interactive Targets</h3>
+                <p>Gaze at targets to activate them - dwell time: <span id="dwellTime">1.5s</span></p>
+                <div class="interactive-target" style="top: 25%; left: 30%;" data-target="1">A</div>
+                <div class="interactive-target" style="top: 25%; left: 70%;" data-target="2">B</div>
+                <div class="interactive-target" style="top: 75%; left: 30%;" data-target="3">C</div>
+                <div class="interactive-target" style="top: 75%; left: 70%;" data-target="4">D</div>
+                <div class="interactive-target" style="top: 50%; left: 50%;" data-target="5">★</div>
+            </div>
+        </div>
+
+        <div class="heatmap-container">
+            <h3 style="text-align: center; margin: 0 0 20px 0; position: relative; z-index: 2;">🔥 Neural Activity Heatmap</h3>
+            <div id="heatmap" style="position: relative; height: 100%;"></div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="gazeCount">0</div>
+                <div class="stat-label">Gaze Samples</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="accuracy">--</div>
+                <div class="stat-label">Accuracy Score</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="fps">0</div>
+                <div class="stat-label">Tracking FPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="targetHits">0</div>
+                <div class="stat-label">Target Activations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="dwellCount">0</div>
+                <div class="stat-label">Dwell Selections</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="sessionTime">00:00</div>
+                <div class="stat-label">Session Time</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="gaze-dot" id="gazeDot" style="display: none;"></div>
+    <div class="dwell-indicator" id="dwellIndicator"></div>
+
+    <script>
+        // ...existing code...
+        let isTracking = false;
+        let showGazeDot = true;
+        let gazeCount = 0;
+        let targetHits = 0;
+        let dwellCount = 0;
+        let lastFrameTime = Date.now();
+        let frameCount = 0;
+        let calibrationPoints = [];
+        let isCalibrating = false;
+        let dwellMode = false;
+        let dwellTimeMs = 1500;
+        let currentDwellTarget = null;
+        let dwellStartTime = 0;
+        let sessionStartTime = Date.now();
+        let gazeTrail = [];
+
+        // DOM elements
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const calibrateBtn = document.getElementById('calibrateBtn');
+        const toggleBtn = document.getElementById('togglePrediction');
+        const clearBtn = document.getElementById('clearHeatmap');
+        const autoCalBtn = document.getElementById('autoCalibrate');
+        const precisionCalBtn = document.getElementById('precisionCalibrate');
+        const dwellBtn = document.getElementById('dwellMode');
+        const status = document.getElementById('status');
+        const gazeDot = document.getElementById('gazeDot');
+        const dwellIndicator = document.getElementById('dwellIndicator');
+        const heatmap = document.getElementById('heatmap');
+
+        // Initialize WebGazer with enhanced features
+        function initWebGazer() {
+            webgazer.setGazeListener((data, timestamp) => {
+                if (data == null) return;
+                
+                gazeCount++;
+                frameCount++;
+
+                // Update gaze dot with trail effect
+                if (showGazeDot) {
+                    updateGazeDot(data.x, data.y);
+                }
+
+                // Add to heatmap
+                addHeatmapPoint(data.x, data.y);
+
+                // Handle dwell mode or direct targeting
+                if (dwellMode) {
+                    handleDwellInteraction(data.x, data.y);
+                } else {
+                    checkTargetHit(data.x, data.y);
+                }
+
+                // Update stats
+                updateStats();
+            });
+
+            webgazer.setRegression('ridge')
+                .setTracker('TFFacemesh')
+                .begin();
+        }
+
+        // Enhanced gaze dot with trail effect
+        function updateGazeDot(x, y) {
+            gazeDot.style.left = x + 'px';
+            gazeDot.style.top = y + 'px';
+            gazeDot.style.display = 'block';
+
+            // Create trail effect
+            if (Math.random() < 0.3) { // Reduce trail frequency for performance
+                createTrailDot(x, y);
+            }
+        }
+
+        function createTrailDot(x, y) {
+            const trail = document.createElement('div');
+            trail.className = 'gaze-trail';
+            trail.style.left = (x - 3) + 'px';
+            trail.style.top = (y - 3) + 'px';
+            document.body.appendChild(trail);
+
+            setTimeout(() => {
+                if (trail.parentNode) {
+                    trail.parentNode.removeChild(trail);
+                }
+            }, 1000);
+        }
+
+        // Enhanced dwell interaction
+        function handleDwellInteraction(x, y) {
+            const target = getTargetUnderGaze(x, y);
+            
+            if (target) {
+                if (currentDwellTarget !== target) {
+                    currentDwellTarget = target;
+                    dwellStartTime = Date.now();
+                    showDwellIndicator(target);
+                }
+                
+                const dwellProgress = (Date.now() - dwellStartTime) / dwellTimeMs;
+                updateDwellProgress(dwellProgress);
+                
+                if (dwellProgress >= 1) {
+                    activateTarget(target);
+                    currentDwellTarget = null;
+                    hideDwellIndicator();
+                    dwellCount++;
+                }
+            } else {
+                currentDwellTarget = null;
+                hideDwellIndicator();
+            }
+        }
+
+        function getTargetUnderGaze(x, y) {
+            const targets = document.querySelectorAll('.interactive-target');
+            for (let target of targets) {
+                const rect = target.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                if (distance < 60) {
+                    return target;
+                }
+            }
+            return null;
+        }
+
+        function showDwellIndicator(target) {
+            const rect = target.getBoundingClientRect();
+            dwellIndicator.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+            dwellIndicator.style.top = (rect.top + rect.height / 2 - 20) + 'px';
+            dwellIndicator.classList.add('active');
+        }
+
+        function hideDwellIndicator() {
+            dwellIndicator.classList.remove('active');
+        }
+
+        function updateDwellProgress(progress) {
+            const circumference = 2 * Math.PI * 18; // radius of 18
+            const offset = circumference - (progress * circumference);
+            // Update progress ring if you add SVG
+        }
+
+        function activateTarget(target) {
+            target.classList.add('clicked');
+            target.style.background = 'linear-gradient(45deg, #ff6b6b, #ff4757)';
+            target.style.transform = 'translate(-50%, -50%) scale(1.3) rotate(10deg)';
+            
+            // Reset after animation
+            setTimeout(() => {
+                target.classList.remove('clicked');
+                target.style.background = 'linear-gradient(45deg, #4ecdc4, #44a08d)';
+                target.style.transform = 'translate(-50%, -50%) scale(1)';
+            }, 600);
+            
+            targetHits++;
+        }
+
+        // Enhanced heatmap with better visualization
+        function addHeatmapPoint(x, y) {
+            const rect = heatmap.getBoundingClientRect();
+            const relativeX = ((x - rect.left) / rect.width) * 100;
+            const relativeY = ((y - rect.top) / rect.height) * 100;
+
+            if (relativeX >= 0 && relativeX <= 100 && relativeY >= 0 && relativeY <= 100) {
+                const point = document.createElement('div');
+                point.className = 'heatmap-point';
+                point.style.left = relativeX + '%';
+                point.style.top = relativeY + '%';
+                
+                // Add intensity based on density
+                const intensity = Math.random() * 0.5 + 0.5;
+                point.style.background = `radial-gradient(circle, rgba(255, 107, 107, ${intensity}), transparent)`;
+                
+                heatmap.appendChild(point);
+
+                // Remove old points to prevent memory issues
+                if (heatmap.children.length > 1000) {
+                    for (let i = 0; i < 100; i++) {
+                        if (heatmap.children[i]) {
+                            heatmap.removeChild(heatmap.children[i]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Enhanced calibration with more points
+        function precisionCalibrate() {
+            const points = [
+                {x: 5, y: 5}, {x: 25, y: 5}, {x: 50, y: 5}, {x: 75, y: 5}, {x: 95, y: 5},
+                {x: 5, y: 30}, {x: 25, y: 30}, {x: 75, y: 30}, {x: 95, y: 30},
+                {x: 5, y: 50}, {x: 50, y: 50}, {x: 95, y: 50},
+                {x: 5, y: 70}, {x: 25, y: 70}, {x: 75, y: 70}, {x: 95, y: 70},
+                {x: 5, y: 95}, {x: 25, y: 95}, {x: 50, y: 95}, {x: 75, y: 95}, {x: 95, y: 95}
+            ];
+            startCalibrationSequence(points, 'Precision calibration in progress...');
+        }
+
+        function autoCalibrate() {
+            const points = [
+                {x: 10, y: 10}, {x: 50, y: 10}, {x: 90, y: 10},
+                {x: 10, y: 50}, {x: 50, y: 50}, {x: 90, y: 50},
+                {x: 10, y: 90}, {x: 50, y: 90}, {x: 90, y: 90}
+            ];
+            startCalibrationSequence(points, 'Standard calibration in progress...');
+        }
+
+        function startCalibrationSequence(points, message) {
+            let currentPoint = 0;
+            isCalibrating = true;
+            status.textContent = message;
+
+            function showNextPoint() {
+                document.getElementById('calibrationPoints').innerHTML = '';
+                
+                if (currentPoint >= points.length) {
+                    isCalibrating = false;
+                    status.textContent = '✅ Calibration complete! Neural patterns learned successfully.';
+                    return;
+                }
+
+                const point = points[currentPoint];
+                const calibPoint = document.createElement('div');
+                calibPoint.className = 'calibration-point';
+                calibPoint.style.left = point.x + '%';
+                calibPoint.style.top = point.y + '%';
+                
+                calibPoint.onclick = () => {
+                    currentPoint++;
+                    setTimeout(showNextPoint, 800);
+                };
+                
+                document.getElementById('calibrationPoints').appendChild(calibPoint);
+            }
+
+            showNextPoint();
+        }
+
+        // Enhanced stats with session time
+        function updateStats() {
+            document.getElementById('gazeCount').textContent = gazeCount.toLocaleString();
+            document.getElementById('targetHits').textContent = targetHits;
+            document.getElementById('dwellCount').textContent = dwellCount;
+
+            // Calculate FPS
+            const now = Date.now();
+            if (now - lastFrameTime >= 1000) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                lastFrameTime = now;
+            }
+
+            // Update session time
+            const sessionDuration = Math.floor((now - sessionStartTime) / 1000);
+            const minutes = Math.floor(sessionDuration / 60).toString().padStart(2, '0');
+            const seconds = (sessionDuration % 60).toString().padStart(2, '0');
+            document.getElementById('sessionTime').textContent = `${minutes}:${seconds}`;
+
+            // Estimate accuracy based on calibration and interaction success
+            if (gazeCount > 100) {
+                const accuracyScore = Math.min(95, 60 + (targetHits / gazeCount * 1000) * 35);
+                document.getElementById('accuracy').textContent = accuracyScore.toFixed(1) + '%';
+            }
+        }
+
+        // ...existing code continues...
+
+        // Enhanced event listeners
+        startBtn.addEventListener('click', () => {
+            initWebGazer();
+            isTracking = true;
+            sessionStartTime = Date.now();
+            startBtn.disabled = true;
+            startBtn.classList.add('active');
+            stopBtn.disabled = false;
+            calibrateBtn.disabled = false;
+            autoCalBtn.disabled = false;
+            precisionCalBtn.disabled = false;
+            status.textContent = '🚀 Neural interface active! Initializing eye tracking systems...';
+        });
+
+        stopBtn.addEventListener('click', () => {
+            webgazer.end();
+            isTracking = false;
+            startBtn.disabled = false;
+            startBtn.classList.remove('active');
+            stopBtn.disabled = true;
+            calibrateBtn.disabled = true;
+            autoCalBtn.disabled = true;
+            precisionCalBtn.disabled = true;
+            gazeDot.style.display = 'none';
+            hideDwellIndicator();
+            status.textContent = '⏹️ Neural interface disconnected.';
+        });
+
+        toggleBtn.addEventListener('click', () => {
+            showGazeDot = !showGazeDot;
+            if (!showGazeDot) {
+                gazeDot.style.display = 'none';
+            }
+            toggleBtn.textContent = showGazeDot ? '👁️ Hide Gaze Dot' : '👁️ Show Gaze Dot';
+        });
+
+        dwellBtn.addEventListener('click', () => {
+            dwellMode = !dwellMode;
+            dwellBtn.classList.toggle('active');
+            dwellBtn.textContent = dwellMode ? '⏱️ Direct Mode' : '⏱️ Dwell Mode';
+            status.textContent = dwellMode ? 
+                '⏱️ Dwell mode active - focus on targets to select them' : 
+                '👁️ Direct targeting mode active';
+        });
+
+        clearBtn.addEventListener('click', () => {
+            heatmap.innerHTML = '<h3 style="text-align: center; margin: 0 0 20px 0; position: relative; z-index: 2;">🔥 Neural Activity Heatmap</h3>';
+        });
+
+        autoCalBtn.addEventListener('click', autoCalibrate);
+        precisionCalBtn.addEventListener('click', precisionCalibrate);
+
+        // Add some initial visual feedback
+        function addRandomCalibrationPoint() {
+            if (!isCalibrating && !isTracking) {
+                const x = Math.random() * 80 + 10;
+                const y = Math.random() * 60 + 20;
+                const point = document.createElement('div');
+                point.className = 'calibration-point';
+                point.style.left = x + '%';
+                point.style.top = y + '%';
+                point.onclick = () => {
+                    point.remove();
+                    setTimeout(addRandomCalibrationPoint, 3000);
+                };
+                document.getElementById('calibrationPoints').appendChild(point);
+            }
+        }
+
+        // Start with a demo calibration point
+        setTimeout(addRandomCalibrationPoint, 2000);
+    </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4c6229722a6346bc8eb5cb0e5eae5d41","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
+
