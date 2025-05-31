@@ -394,17 +394,22 @@
             transform: translate(-50%, -50%);
             width: 100px;
             height: 100px;
+            pointer-events: none;
+            z-index: 9998;
         }
 
         .progress-ring-circle {
-            width: 100px;
-            height: 100px;
             fill: transparent;
             stroke: #4ecdc4;
-            stroke-width: 4;
-            stroke-dasharray: 283;
-            stroke-dashoffset: 283;
-            transition: stroke-dashoffset 0.5s;
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.1s linear;
+        }
+
+        .progress-ring-bg {
+            fill: transparent;
+            stroke: rgba(255,255,255,0.15);
+            stroke-width: 3;
         }
 
         .dwell-indicator {
@@ -478,7 +483,6 @@
         <div class="controls">
             <button class="btn" id="startBtn">🚀 Initialize Tracking</button>
             <button class="btn" id="stopBtn" disabled>⏹️ Stop Tracking</button>
-            <button class="btn" id="calibrateBtn" disabled>🎯 Smart Calibration</button>
             <button class="btn" id="togglePrediction">👁️ Toggle Gaze Dot</button>
             <button class="btn" id="clearHeatmap">🧹 Clear Heatmap</button>
             <button class="btn" id="dwellMode">⏱️ Dwell Mode</button>
@@ -545,6 +549,17 @@
 
     <div class="gaze-dot" id="gazeDot" style="display: none;"></div>
     <div class="dwell-indicator" id="dwellIndicator"></div>
+    <div class="progress-ring" id="dwellProgressRing" style="display: none;">
+        <svg width="80" height="80" viewBox="0 0 36 36"> 
+            <circle class="progress-ring-bg" cx="18" cy="18" r="15.9155" />
+            <circle class="progress-ring-circle" id="dwellProgressCircle"
+                cx="18" cy="18" r="15.9155"
+                stroke-dasharray="100" 
+                stroke-dashoffset="100"
+                transform="rotate(-90 18 18)"> 
+            </circle>
+        </svg>
+    </div>
 
     <script>
         let isTracking = false;
@@ -565,7 +580,6 @@
 
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
-        const calibrateBtn = document.getElementById('calibrateBtn');
         const toggleBtn = document.getElementById('togglePrediction');
         const clearBtn = document.getElementById('clearHeatmap');
         const autoCalBtn = document.getElementById('autoCalibrate');
@@ -575,6 +589,8 @@
         const gazeDot = document.getElementById('gazeDot');
         const dwellIndicator = document.getElementById('dwellIndicator');
         const heatmap = document.getElementById('heatmap');
+        const dwellProgressRing = document.getElementById('dwellProgressRing');
+        const dwellProgressCircle = document.getElementById('dwellProgressCircle');
 
         let currentCdnIndex = 0;
         const webgazerCdnUrls = [
@@ -672,7 +688,6 @@
                     startBtn.disabled = true;
                     startBtn.classList.add('active');
                     stopBtn.disabled = false;
-                    calibrateBtn.disabled = false;
                     autoCalBtn.disabled = false;
                     precisionCalBtn.disabled = false;
                 })
@@ -688,7 +703,6 @@
                     startBtn.disabled = false;
                     startBtn.classList.remove('active');
                     stopBtn.disabled = true;
-                    calibrateBtn.disabled = true;
                     autoCalBtn.disabled = true;
                     precisionCalBtn.disabled = true;
                     isTracking = false;
@@ -759,7 +773,7 @@
                     showDwellIndicator(target);
                 }
 
-                const dwellProgress = (Date.now() - dwellStartTime) / dwellTimeMs;
+                const dwellProgress = Math.min(1, (Date.now() - dwellStartTime) / dwellTimeMs);
                 updateDwellProgress(dwellProgress);
 
                 if (dwellProgress >= 1) {
@@ -769,8 +783,10 @@
                     dwellCount++;
                 }
             } else {
-                currentDwellTarget = null;
-                hideDwellIndicator();
+                if (currentDwellTarget) { 
+                    currentDwellTarget = null;
+                    hideDwellIndicator();
+                }
             }
         }
 
@@ -790,18 +806,24 @@
 
         function showDwellIndicator(target) {
             const rect = target.getBoundingClientRect();
-            dwellIndicator.style.left = (rect.left + rect.width / 2 - 20) + 'px';
-            dwellIndicator.style.top = (rect.top + rect.height / 2 - 20) + 'px';
+            dwellIndicator.style.left = (rect.left + rect.width / 2 - dwellIndicator.offsetWidth / 2) + 'px';
+            dwellIndicator.style.top = (rect.top + rect.height / 2 - dwellIndicator.offsetHeight / 2) + 'px';
             dwellIndicator.classList.add('active');
+
+            dwellProgressRing.style.left = (rect.left + rect.width / 2) + 'px';
+            dwellProgressRing.style.top = (rect.top + rect.height / 2) + 'px';
+            dwellProgressRing.style.display = 'block';
+            dwellProgressCircle.style.strokeDashoffset = '100'; 
         }
 
         function hideDwellIndicator() {
             dwellIndicator.classList.remove('active');
+            dwellProgressRing.style.display = 'none';
         }
 
         function updateDwellProgress(progress) {
-            const circumference = 2 * Math.PI * 18; 
-            const offset = circumference - (progress * circumference);
+            const offset = 100 - (progress * 100);
+            dwellProgressCircle.style.strokeDashoffset = Math.max(0, Math.min(100, offset));
         }
 
         function addHeatmapPoint(x, y) {
@@ -857,7 +879,6 @@
             startBtn.disabled = true;
             startBtn.classList.add('active');
             stopBtn.disabled = true;
-            calibrateBtn.disabled = true;
             autoCalBtn.disabled = true;
             precisionCalBtn.disabled = true;
 
@@ -882,7 +903,6 @@
             startBtn.disabled = false;
             startBtn.classList.remove('active');
             stopBtn.disabled = true;
-            calibrateBtn.disabled = true;
             autoCalBtn.disabled = true;
             precisionCalBtn.disabled = true;
             gazeDot.style.display = 'none';
@@ -934,29 +954,57 @@
         function startCalibrationSequence(points, message) {
             let currentPoint = 0;
             isCalibrating = true;
+            autoCalBtn.disabled = true;
+            precisionCalBtn.disabled = true;
             status.textContent = message;
+            const calibrationZone = document.getElementById('calibrationPoints');
 
             function showNextPoint() {
-                document.getElementById('calibrationPoints').innerHTML = '';
+                calibrationZone.innerHTML = ''; 
 
                 if (currentPoint >= points.length) {
                     isCalibrating = false;
                     status.textContent = '✅ Calibration complete! Neural patterns learned successfully.';
+                    if(isTracking) { 
+                        autoCalBtn.disabled = false;
+                        precisionCalBtn.disabled = false;
+                    }
                     return;
                 }
 
-                const point = points[currentPoint];
+                const pointData = points[currentPoint];
                 const calibPoint = document.createElement('div');
                 calibPoint.className = 'calibration-point';
-                calibPoint.style.left = point.x + '%';
-                calibPoint.style.top = point.y + '%';
+                calibPoint.style.left = pointData.x + '%';
+                calibPoint.style.top = pointData.y + '%';
 
                 calibPoint.onclick = () => {
+                    if (typeof webgazer === 'undefined' || !webgazer.isReady()) {
+                        console.warn("WebGazer not ready, cannot record calibration click.");
+                        status.textContent = '⚠️ WebGazer not ready. Try restarting tracking.';
+                        return;
+                    }
+
+                    calibPoint.style.background = 'radial-gradient(circle, #2ecc71, #27ae60)'; 
+                    calibPoint.style.animation = 'none';
+                    calibPoint.style.transform = 'translate(-50%, -50%) scale(0.8)';
+
+                    const calibrationZoneRect = calibrationZone.getBoundingClientRect();
+                    const pointAbsX = calibrationZoneRect.left + (pointData.x / 100) * calibrationZoneRect.width;
+                    const pointAbsY = calibrationZoneRect.top + (pointData.y / 100) * calibrationZoneRect.height;
+                    
+                    const finalX = pointAbsX; 
+                    const finalY = pointAbsY;
+
+                    console.log(`Recording calibration click at screen X: ${finalX}, Y: ${finalY}`);
+                    webgazer.recordScreenPosition(finalX, finalY, 'click');
+                    
                     currentPoint++;
-                    setTimeout(showNextPoint, 800);
+                    setTimeout(showNextPoint, 800); 
                 };
 
-                document.getElementById('calibrationPoints').appendChild(calibPoint);
+                calibrationZone.appendChild(calibPoint);
+                status.textContent = `${message} (Click target ${currentPoint + 1}/${points.length})`;
             }
 
             showNextPoint();
